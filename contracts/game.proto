@@ -1,5 +1,5 @@
 syntax = "proto3";
-
+hola
 option csharp_namespace = "Game.Contracts";
 package distributed_dice;
 
