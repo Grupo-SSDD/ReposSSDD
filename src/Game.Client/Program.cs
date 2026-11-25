@@ -1,4 +1,5 @@
 using Game.Client;
+using Game.Core;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 
@@ -9,10 +10,14 @@ var configuration = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
     .AddEnvironmentVariables()
     .Build();
-// 1. Cargar configuración de rabbitMQ en la variable rabbitOptions y 
-// 2. Crear instancia de RabbitGameEventSubscriber con la configuración cargada.
+// 1. Configuración de RabbitMQ (appsettings.json, sobrescribible con RabbitMQ__Host, etc.)
+var rabbitOptions = configuration
+    .GetSection("RabbitMQ")
+    .Get<RabbitMqConnectionOptions>()
+    ?? throw new InvalidOperationException("Falta la sección RabbitMQ en appsettings.json.");
 
-//--------
+// 2. Suscriptor de eventos con esa configuración
+await using var eventSubscriber = new RabbitGameEventSubscriber(rabbitOptions);
 
 
 // Aquí se crea el cliente gRPC y se pasa la dirección del servidor:
@@ -21,8 +26,7 @@ await using var grpcClient = new GrpcGameClient(serverAddress);
 
 var ansiConsole = AnsiConsole.Console;
 
-//Cuando se esté implementando rabbitMQ, sustituir null por el suscriptor de eventos creado en el paso 2.
-var consoleGame = new ConsoleGame(grpcClient, null, ansiConsole);
+var consoleGame = new ConsoleGame(grpcClient, eventSubscriber, ansiConsole);
 if (Console.IsInputRedirected ||
     Console.IsOutputRedirected ||
     !ansiConsole.Profile.Capabilities.Interactive)

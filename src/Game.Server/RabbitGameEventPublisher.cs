@@ -9,10 +9,12 @@ namespace Game.Server;
 public sealed class RabbitGameEventPublisher(RabbitMqConnectionOptions options)
     : IGameEventPublisher, IAsyncDisposable
 {
-    public const string ExchangeName = "distributed-dice";
-    public const string TurnRoutingKey = "game.turn";
-    public const string ScoresRoutingKey = "game.scores";
     public RabbitMqConnectionOptions ConnectionOptions { get; } = options;
+
+    // Valores leídos de appsettings.json (sección RabbitMQ)
+    public string ExchangeName => ConnectionOptions.ExchangeName;
+    public string TurnRoutingKey => ConnectionOptions.TurnRoutingKey;
+    public string ScoresRoutingKey => ConnectionOptions.ScoresRoutingKey;
 
     private readonly SemaphoreSlim _connectionGate = new(1, 1);
     private IConnection? _connection;
@@ -40,9 +42,11 @@ public sealed class RabbitGameEventPublisher(RabbitMqConnectionOptions options)
         try
         {
             var channel = await GetChannelAsync(cancellationToken);
-            // Publicar el mensaje en el exchange con la routing key y el body del mensaje.
-
-            //--------
+            await channel.BasicPublishAsync(
+                exchange: ExchangeName,
+                routingKey: message.RoutingKey,
+                body: message.Body,
+                cancellationToken: cancellationToken);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
@@ -82,15 +86,25 @@ public sealed class RabbitGameEventPublisher(RabbitMqConnectionOptions options)
                 await _connection.DisposeAsync();
                 _connection = null;
             }
-            try{
-            /*
-            1. Crea la factoria de conexiones, 
-            2. inicializa la conexión, 
-            3. el canal
-            4. y declara el exchange. 
-            Si ocurre un error, se liberan los recursos y se lanza la excepción.
-             */
-            
+            try
+            {
+                var factory = new ConnectionFactory
+                {
+                    HostName = ConnectionOptions.Host,
+                    Port = ConnectionOptions.Port,
+                    UserName = ConnectionOptions.UserName,
+                    Password = ConnectionOptions.Password
+                };
+
+                _connection = await factory.CreateConnectionAsync(cancellationToken);
+                _channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
+                await _channel.ExchangeDeclareAsync(
+                    exchange: ExchangeName,
+                    type: ExchangeType.Topic,
+                    durable: true,
+                    autoDelete: false,
+                    cancellationToken: cancellationToken);
+
                 return _channel;
             }
             catch
@@ -101,8 +115,12 @@ public sealed class RabbitGameEventPublisher(RabbitMqConnectionOptions options)
                     _channel = null;
                 }
 
-                await _connection.DisposeAsync();
-                _connection = null;
+                if (_connection is not null)
+                {
+                    await _connection.DisposeAsync();
+                    _connection = null;
+                }
+
                 throw;
             }
         }

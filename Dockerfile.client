@@ -1,0 +1,15 @@
+# Construir desde la raíz del repositorio:
+#   docker build -f Dockerfile.client -t dados-client .
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /repo
+COPY contracts/ contracts/
+COPY src/Game.Core/ src/Game.Core/
+COPY src/Game.Client/ src/Game.Client/
+RUN dotnet publish src/Game.Client/Game.Client.csproj -c Release -o /app
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0
+WORKDIR /app
+COPY --from=build /app .
+ENV GAME_SERVER_ADDRESS=http://localhost:5000 \
+    RabbitMQ__Host=localhost
+ENTRYPOINT ["dotnet", "Game.Client.dll"]

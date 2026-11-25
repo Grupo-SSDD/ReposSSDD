@@ -14,9 +14,10 @@ public sealed class RabbitGameEventSubscriber(RabbitMqConnectionOptions options)
 {
     public RabbitMqConnectionOptions ConnectionOptions { get; } = options;
 
-    public const string ExchangeName = "distributed-dice";
-    public const string TurnRoutingKey = "game.turn";
-    public const string ScoresRoutingKey = "game.scores";
+    // Valores leídos de appsettings.json (sección RabbitMQ)
+    public string ExchangeName => ConnectionOptions.ExchangeName;
+    public string TurnRoutingKey => ConnectionOptions.TurnRoutingKey;
+    public string ScoresRoutingKey => ConnectionOptions.ScoresRoutingKey;
 
     private readonly SemaphoreSlim _lifecycleGate = new(1, 1);
     private IConnection? _connection;
@@ -39,31 +40,43 @@ public sealed class RabbitGameEventSubscriber(RabbitMqConnectionOptions options)
 
             try
             {
-                /*
-                1. Crea la factoría de conexiones.
-                2. Inicializa la conexión con la factoría.
-                */
+                var factory = new ConnectionFactory
+                {
+                    HostName = ConnectionOptions.Host,
+                    Port = ConnectionOptions.Port,
+                    UserName = ConnectionOptions.UserName,
+                    Password = ConnectionOptions.Password
+                };
+                var connection = await factory.CreateConnectionAsync(cancellationToken);
                 IChannel? channel = null;
                 try
                 {
-                    // 3. Inicializa el canal con la conexión.
-                    // 4. Declara el exchange con el nombre ExchangeName, tipo "topic" y durable.
-
-
-
-
-                    //--------
+                    channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+                    await channel.ExchangeDeclareAsync(
+                        exchange: ExchangeName,
+                        type: ExchangeType.Topic,
+                        durable: true,
+                        autoDelete: false,
+                        cancellationToken: cancellationToken);
                     
-                    /*
-                    5. Declara una cola temporal y exclusiva para recibir los eventos.
-                    6. Vincula la cola al exchange con la routing key TurnRoutingKey.
-                    7. Vincula la cola al exchange con la routing key ScoresRoutingKey.
-                    (o crea dos colas separadas, una para cada routing key, y vincula cada una al exchange con su routing key correspondiente)
-                    */
-
-
-
-                    //--------
+                    // Cola temporal: nombre generado por el bróker, exclusiva de este cliente y
+                    // borrada al desconectar. Recibe tanto turnos como puntuaciones.
+                    var queue = await channel.QueueDeclareAsync(
+                        queue: string.Empty,
+                        durable: false,
+                        exclusive: true,
+                        autoDelete: true,
+                        cancellationToken: cancellationToken);
+                    await channel.QueueBindAsync(
+                        queue: queue.QueueName,
+                        exchange: ExchangeName,
+                        routingKey: TurnRoutingKey,
+                        cancellationToken: cancellationToken);
+                    await channel.QueueBindAsync(
+                        queue: queue.QueueName,
+                        exchange: ExchangeName,
+                        routingKey: ScoresRoutingKey,
+                        cancellationToken: cancellationToken);
                 
                     Task HandleEventReceivedAsync(object sender, BasicDeliverEventArgs delivery)
                     {
@@ -95,29 +108,28 @@ public sealed class RabbitGameEventSubscriber(RabbitMqConnectionOptions options)
                         return Task.CompletedTask;
                     }
 
-                    // 8. Crea un consumidor asíncrono y suscríbete a los eventos Received y Shutdown con los manejadores anteriores.
-                    
+                    var consumer = new AsyncEventingBasicConsumer(channel);
+                    consumer.ReceivedAsync += HandleEventReceivedAsync;
+                    consumer.ShutdownAsync += HandleConsumerShutdownAsync;
 
-                    //--------
+                    await channel.BasicConsumeAsync(
+                        queue: queue.QueueName,
+                        autoAck: true,
+                        consumer: consumer,
+                        cancellationToken: cancellationToken);
 
-                    // 9. Inicia la suscripción a la cola con el consumidor creado, usando autoAck = true.
-                    
-                    //--------
-
-                    // 10. Asigna la conexión (connection), el canal (channel) y el canal de eventos (events) a los campos de la clase (_connection, _channel, _events).
-
-                    //--------
+                    _connection = connection;
+                    _channel = channel;
+                    _events = events;
                 }
                 catch
                 {
                     if (channel is not null)
                     {
-                        // dispose del canal
+                        await channel.DisposeAsync();
                     }
 
-                    //dispose de la conexión
-
-                    //--------
+                    await connection.DisposeAsync();
 
                     throw;
                 }

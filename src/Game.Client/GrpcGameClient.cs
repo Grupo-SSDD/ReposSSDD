@@ -14,7 +14,11 @@ public sealed class GrpcGameClient : IPlayerGameClient, IAsyncDisposable
 
     public GrpcGameClient(string serverAddress, HttpMessageHandler? httpHandler = null)
     {
-        // inicializa y cliente gRPC con la dirección del servidor y el manejador HTTP opcional.
+        _channel = GrpcChannel.ForAddress(serverAddress, new GrpcChannelOptions
+        {
+            HttpHandler = httpHandler
+        });
+        _client = new GameService.GameServiceClient(_channel);
     }
 
     public Task<CreateGameResult> CreateGameAsync(
@@ -23,36 +27,30 @@ public sealed class GrpcGameClient : IPlayerGameClient, IAsyncDisposable
         CancellationToken cancellationToken) =>
         CallAsync(async () =>
         {
-            /*
-            1. Prepara la solicitud gRPC. Crea un objeto CreateGameRequest y asigna:
-                A Name, el nombre de la partida recibido en el parámetro name.
-                A PlayerCount, el número de jugadores recibido en playerCount.
-            2. Llama al servidor. Usa _client.CreateGameAsync con la solicitud anterior y pasa cancellationToken como token de cancelación. Espera la respuesta con await y guárdala en una variable, por ejemplo reply.
-            3. Convierte el estado recibido. La respuesta contiene el estado de la partida en reply.State, expresado con los tipos del contrato gRPC. Pásalo a ToSnapshot y guarda el resultado en state, que utiliza los modelos de la aplicación.
+            var reply = await _client.CreateGameAsync(
+                new CreateGameRequest
+                {
+                    Name = name,
+                    PlayerCount = playerCount
+                },
+                cancellationToken: cancellationToken);
 
-            4. Obtén el identificador del jugador. El servidor devuelve reply.PlayerId como texto. Pásalo a ParseRequiredGuid junto con "jugador" para obtener un GUID obligatorio y detectar un identificador inválido.
-
-            5. Devuelve el resultado. Crea un CreateGameResult con estos tres datos, en orden:
-                state.Id: identificador de la partida recién creada.
-                ParseRequiredGuid(reply.PlayerId, "jugador"): El GUID del jugador obtenido en el paso anterior.
-                state: la instantánea completa del estado inicial.
-            */
+            var state = ToSnapshot(reply.State);
+            var playerId = ParseRequiredGuid(reply.PlayerId, "jugador");
+            return new CreateGameResult(state.Id, playerId, state);
         }, cancellationToken);
 
     public Task<JoinGameResult> JoinGameAsync(string name, CancellationToken cancellationToken) =>
         CallAsync(async () =>
         {
-            /*
-            1. Prepara la solicitud gRPC. Crea un objeto JoinGameRequest y asigna a su propiedad Name el nombre de la partida recibido en el parámetro name.
-            2. Llama al servidor. Usa _client.JoinGameAsync con la solicitud anterior y pasa cancellationToken como token de cancelación. Espera la respuesta con await y guárdala en una variable, por ejemplo reply.
-            3. Obtén el identificador del jugador. El servidor devuelve reply.PlayerId como texto. Pásalo a ParseRequiredGuid junto con "jugador" para obtener un GUID obligatorio y detectar un identificador inválido.
-            4. Convierte el estado recibido. Pasa reply.State, expresado con los tipos del contrato gRPC, a ToSnapshot para obtener una instantánea con los modelos de la aplicación.
-            5. Procesa la advertencia. Pasa reply.EventDeliveryWarning a EmptyToNull para convertir una advertencia vacía en null.
-            6. Devuelve el resultado. Crea un JoinGameResult con estos tres datos, en orden:
-                El GUID del jugador obtenido en el paso 3.
-                La instantánea del estado obtenida en el paso 4.
-                La advertencia procesada en el paso 5.
-            */
+            var reply = await _client.JoinGameAsync(
+                new JoinGameRequest { Name = name },
+                cancellationToken: cancellationToken);
+
+            var playerId = ParseRequiredGuid(reply.PlayerId, "jugador");
+            var state = ToSnapshot(reply.State);
+            var warning = EmptyToNull(reply.EventDeliveryWarning);
+            return new JoinGameResult(playerId, state, warning);
         }, cancellationToken);
 
     public Task<GameSnapshot> GetStateAsync(Guid gameId, CancellationToken cancellationToken) =>
@@ -70,22 +68,20 @@ public sealed class GrpcGameClient : IPlayerGameClient, IAsyncDisposable
         CancellationToken cancellationToken) =>
         CallAsync(async () =>
         {
-            /*
-            1. Prepara la solicitud gRPC. Crea un objeto RollRequest y asigna:
-                A GameId, el identificador de partida gameId convertido a texto en formato GUID "D".
-                A PlayerId, el identificador playerId convertido al mismo formato.
-            2. Llama al servidor. Usa _client.RollAsync con la solicitud anterior y pasa cancellationToken como token de cancelación. Espera la respuesta con await y guárdala en una variable, por ejemplo reply.
-            3. Obtén el identificador del jugador. Pasa reply.PlayerId a ParseRequiredGuid junto con "jugador" para convertir el texto recibido en un GUID obligatorio y detectar un identificador inválido.
-            4. Recoge los dados. Obtén reply.FirstDie y reply.SecondDie, que contienen los valores de los dos dados devueltos por el servidor.
-            5. Convierte el estado recibido. Pasa reply.State a ToSnapshot para obtener una instantánea con los modelos de la aplicación.
-            6. Procesa la advertencia. Pasa reply.EventDeliveryWarning a EmptyToNull para convertir una advertencia vacía en null.
-            7. Devuelve el resultado. Crea un RollResult con estos cinco datos, en orden:
-                El GUID del jugador.
-                El valor del primer dado.
-                El valor del segundo dado.
-                La instantánea del estado.
-                La advertencia procesada.
-            */
+            var reply = await _client.RollAsync(
+                new RollRequest
+                {
+                    GameId = gameId.ToString("D"),
+                    PlayerId = playerId.ToString("D")
+                },
+                cancellationToken: cancellationToken);
+
+            var rolledPlayerId = ParseRequiredGuid(reply.PlayerId, "jugador");
+            var firstDie = reply.FirstDie;
+            var secondDie = reply.SecondDie;
+            var state = ToSnapshot(reply.State);
+            var warning = EmptyToNull(reply.EventDeliveryWarning);
+            return new RollResult(rolledPlayerId, firstDie, secondDie, state, warning);
         }, cancellationToken);
 
     private static async Task<T> CallAsync<T>(
