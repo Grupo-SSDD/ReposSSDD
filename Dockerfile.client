@@ -11,5 +11,5 @@ FROM mcr.microsoft.com/dotnet/runtime:10.0
 WORKDIR /app
 COPY --from=build /app .
 ENV GAME_SERVER_ADDRESS=http://localhost:5000 \
-    RabbitMQ__Host=localhost
+    RABBITMQ_HOST=localhost
 ENTRYPOINT ["dotnet", "Game.Client.dll"]

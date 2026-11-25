@@ -83,7 +83,7 @@ public sealed class RabbitGameEventSubscriber(RabbitMqConnectionOptions options)
                         try
                         {
                             events.Writer.TryWrite(
-                                RabbitGameEventDeserializer.Deserialize(delivery.RoutingKey, delivery.Body));
+                                RabbitGameEventDeserializer.Deserialize(delivery.RoutingKey, delivery.Body, ConnectionOptions));
                         }
                         catch (Exception exception) when (
                             exception is InvalidDataException or InvalidProtocolBufferException or FormatException)

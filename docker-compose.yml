@@ -14,7 +14,7 @@ services:
       context: .
       dockerfile: Dockerfile.server
     environment:
-      RabbitMQ__Host: rabbitmq
+      RABBITMQ_HOST: rabbitmq
     ports:
       - "5000:5000"
     depends_on:
@@ -27,7 +27,7 @@ services:
       dockerfile: Dockerfile.client
     environment:
       GAME_SERVER_ADDRESS: http://server:5000
-      RabbitMQ__Host: rabbitmq
+      RABBITMQ_HOST: rabbitmq
     stdin_open: true
     tty: true
     profiles: ["client"]

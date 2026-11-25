@@ -38,7 +38,7 @@ public sealed class RabbitGameEventPublisher(RabbitMqConnectionOptions options)
 
     public async ValueTask PublishAsync(GameEvent gameEvent, CancellationToken cancellationToken)
     {
-        var message = RabbitGameEventSerializer.Serialize(gameEvent);
+        var message = RabbitGameEventSerializer.Serialize(gameEvent, ConnectionOptions);
         try
         {
             var channel = await GetChannelAsync(cancellationToken);

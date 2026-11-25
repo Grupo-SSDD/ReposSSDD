@@ -1,5 +1,4 @@
 using Game.Client;
-using Game.Core;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console;
 
@@ -10,11 +9,8 @@ var configuration = new ConfigurationBuilder()
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
     .AddEnvironmentVariables()
     .Build();
-// 1. Configuración de RabbitMQ (appsettings.json, sobrescribible con RabbitMQ__Host, etc.)
-var rabbitOptions = configuration
-    .GetSection("RabbitMQ")
-    .Get<RabbitMqConnectionOptions>()
-    ?? throw new InvalidOperationException("Falta la sección RabbitMQ en appsettings.json.");
+// 1. Configuración de RabbitMQ (appsettings.json, sobrescribible con RABBITMQ_HOST, etc.)
+var rabbitOptions = RabbitMqConnectionOptions.FromConfiguration(configuration);
 
 // 2. Suscriptor de eventos con esa configuración
 await using var eventSubscriber = new RabbitGameEventSubscriber(rabbitOptions);

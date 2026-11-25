@@ -1,0 +1,40 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Info
+        run: |
+          dotnet --info
+          find . -name "*.csproj" -not -path "*/bin/*" -not -path "*/obj/*"
+
+      # Compila todos los proyectos del repo (Game.Core, Game.Server, Game.Client)
+      # sin depender de rutas ni del nombre de la solución.
+      - name: Restore and build
+        run: |
+          set -e
+          for project in $(find . -name "*.csproj" -not -path "*/bin/*" -not -path "*/obj/*"); do
+            echo "::group::$project"
+            dotnet build "$project" -c Release
+            echo "::endgroup::"
+          done
+
+      # Comprueba que las imágenes Docker se construyen (requisito de entrega)
+      - name: Build Docker images
+        run: |
+          docker build -f Dockerfile.server -t dados-server .
+          docker build -f Dockerfile.client -t dados-client .

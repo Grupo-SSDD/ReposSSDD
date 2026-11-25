@@ -59,8 +59,8 @@ enum GameStatus {
 
 message TurnEvent {
   string game_id = 1;
-  optional int32 current_player_number = 2;  // ausente = partida terminada
-  optional int32 winner_player_number = 3;   // ausente = todavía sin ganador
+  int32 current_player_number = 2;  // 0 = partida terminada (jugadores numerados desde 1)
+  int32 winner_player_number = 3;   // 0 = todavía sin ganador
 }
 
 message PlayerScore {
@@ -72,5 +72,5 @@ message PlayerScore {
 message ScoresEvent {
   string game_id = 1;
   repeated PlayerScore scores = 2;
-  optional int32 winner_player_number = 3;   // ausente = todavía sin ganador
+  int32 winner_player_number = 3;   // 0 = todavía sin ganador
 }

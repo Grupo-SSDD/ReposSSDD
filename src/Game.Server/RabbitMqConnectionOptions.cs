@@ -4,12 +4,22 @@ namespace Game.Server;
 
 public sealed record RabbitMqConnectionOptions(string Host, string UserName, string Password, int Port = 5672)
 {
+    // Movidos desde las constantes del publicador/suscriptor (paso 7)
+    public required string ExchangeName { get; init; }
+    public required string TurnRoutingKey { get; init; }
+    public required string ScoresRoutingKey { get; init; }
+
     public static RabbitMqConnectionOptions FromConfiguration(IConfiguration configuration) =>
         new(
             ReadRequired(configuration, "Host", "RABBITMQ_HOST"),
             ReadRequired(configuration, "UserName", "RABBITMQ_USERNAME"),
             ReadRequired(configuration, "Password", "RABBITMQ_PASSWORD"),
-            ReadPort(configuration));
+            ReadPort(configuration))
+        {
+            ExchangeName = ReadRequired(configuration, "ExchangeName", "RABBITMQ_EXCHANGE_NAME"),
+            TurnRoutingKey = ReadRequired(configuration, "TurnRoutingKey", "RABBITMQ_TURN_ROUTING_KEY"),
+            ScoresRoutingKey = ReadRequired(configuration, "ScoresRoutingKey", "RABBITMQ_SCORES_ROUTING_KEY")
+        };
 
     private static int ReadPort(IConfiguration configuration)
     {

@@ -4,11 +4,8 @@ using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 var builder = WebApplication.CreateBuilder(args);
 // 1. Configuración de RabbitMQ (sección "RabbitMQ" de appsettings.json;
-//    se puede sobrescribir con variables de entorno, p. ej. RabbitMQ__Host=rabbitmq)
-var rabbitOptions = builder.Configuration
-    .GetSection("RabbitMQ")
-    .Get<RabbitMqConnectionOptions>()
-    ?? throw new InvalidOperationException("Falta la sección RabbitMQ en appsettings.json.");
+//    se puede sobrescribir con variables de entorno, p. ej. RABBITMQ_HOST=rabbitmq)
+var rabbitOptions = RabbitMqConnectionOptions.FromConfiguration(builder.Configuration);
 
 // 2. Publicador de eventos con esa configuración
 var eventPublisher = new RabbitGameEventPublisher(rabbitOptions);
