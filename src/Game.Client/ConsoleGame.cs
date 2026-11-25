@@ -598,10 +598,9 @@ public sealed class ConsoleGame(
                         playerCount,
                         cancellationToken);
 
-                        // asignar a _gameId, _playerId y _currentState con los valores de result
-                    _gameId = ;
-                    _playerId = ;
-                    _currentState = ;
+                    _gameId = result.GameId;
+                    _playerId = result.PlayerId;
+                    _currentState = result.State;
                     _lastRoll = null;
                     await output.WriteLineAsync($"Partida creada. Id: {result.GameId}");
                     break;
@@ -619,19 +618,16 @@ public sealed class ConsoleGame(
                     JoinGameResult result;
                     try
                     {
-                        // llamar JoinGameAsync(arguments, cancellationToken) y asignar a result
-
-                        //--------
+                        result = await gameClient.JoinGameAsync(arguments, cancellationToken);
                     }
                     finally
                     {
                         _eventsPendingGameAssociation = null;
                     }
     
-                    // asignar a _gameId, _playerId y _currentState con los valores de result
-                    _gameId = ;
-                    _playerId = ;
-                    _currentState = ;
+                    _gameId = result.State.Id;
+                    _playerId = result.PlayerId;
+                    _currentState = result.State;
                     _lastRoll = null;
                     await output.WriteLineAsync($"Unido a la partida {result.State.Name}.");
                     foreach (var gameEvent in pendingEvents.Where(gameEvent => gameEvent.GameId == _gameId))
@@ -654,15 +650,29 @@ public sealed class ConsoleGame(
                     await WriteSnapshotAsync(_currentState, output);
                     break;
                 case "lanzar":
-                    /*
-                    1. Comprueba que el jugador está en una partida. Verifica que _gameId y _playerId contienen identificadores GUID. Si alguno falta, escribe «Primero crea o únete a una partida.» y sal del caso actual con break. Si ambos son válidos, guárdalos como rollGameId y rollPlayerId.
-                    2. Consulta el estado si no llegan eventos. Si _eventStreamAvailable es falso, llama de forma asíncrona a gameClient.GetStateAsync con rollGameId y cancellationToken. Muestra el estado obtenido mediante WriteSnapshotAsync, pasando también output.
-                    3. Solicita la tirada. Llama a gameClient.RollAsync con los identificadores de partida y jugador y el token de cancelación. Espera el resultado y guárdalo en roll.
-                    4. Actualiza los datos locales. Guarda roll.State en _currentState y los valores roll.FirstDie y roll.SecondDie como pareja en _lastRoll.
-                    5. Muestra el resultado. Escribe en output los valores de ambos dados y el mensaje «Puntuación actualizada.».
-                    6. Muestra la advertencia si corresponde. Llama a WriteWarningAsync con roll.EventDeliveryWarning y output, y espera a que termine.
-                    */
+                {
+                    if (_gameId is not Guid rollGameId || _playerId is not Guid rollPlayerId)
+                    {
+                        await output.WriteLineAsync("Primero crea o únete a una partida.");
+                        break;
+                    }
+
+                    // Sin RabbitMQ no llegan eventos: se reconcilia el estado por gRPC.
+                    if (!_eventStreamAvailable)
+                    {
+                        _currentState = await gameClient.GetStateAsync(rollGameId, cancellationToken);
+                        await WriteSnapshotAsync(_currentState, output);
+                    }
+
+                    // Si no es nuestro turno, el servidor espera hasta que lo sea.
+                    var roll = await gameClient.RollAsync(rollGameId, rollPlayerId, cancellationToken);
+                    _currentState = roll.State;
+                    _lastRoll = (roll.FirstDie, roll.SecondDie);
+                    await output.WriteLineAsync(
+                        $"Dados: {roll.FirstDie} + {roll.SecondDie} = {roll.FirstDie + roll.SecondDie}. Puntuación actualizada.");
+                    await WriteWarningAsync(roll.EventDeliveryWarning, output);
                     break;
+                }
                 case "":
                     break;
                 default:

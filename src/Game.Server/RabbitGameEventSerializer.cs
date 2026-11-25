@@ -6,19 +6,19 @@ namespace Game.Server;
 
 public static class RabbitGameEventSerializer
 {
-    public static (string RoutingKey, byte[] Body) Serialize(GameEvent gameEvent)
+    public static (string RoutingKey, byte[] Body) Serialize(GameEvent gameEvent, RabbitMqConnectionOptions options)
     {
         var (routingKey, json) = gameEvent switch
         {
             TurnChangedEvent turn =>
-                (RabbitGameEventPublisher.TurnRoutingKey, JsonFormatter.Default.Format(new Game.Contracts.TurnEvent
+                (options.TurnRoutingKey, JsonFormatter.Default.Format(new Game.Contracts.TurnEvent
                 {
                     GameId = turn.GameId.ToString("D"),
                     CurrentPlayerNumber = turn.CurrentPlayerNumber ?? 0,
                     WinnerPlayerNumber = turn.WinnerPlayerNumber ?? 0
                 })),
             ScoresUpdatedEvent scores =>
-                (RabbitGameEventPublisher.ScoresRoutingKey, JsonFormatter.Default.Format(new Game.Contracts.ScoresEvent
+                (options.ScoresRoutingKey, JsonFormatter.Default.Format(new Game.Contracts.ScoresEvent
                 {
                     GameId = scores.GameId.ToString("D"),
                     Scores =

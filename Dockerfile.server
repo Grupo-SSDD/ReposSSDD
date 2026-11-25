@@ -1,0 +1,16 @@
+# Construir desde la raíz del repositorio:
+#   docker build -f Dockerfile.server -t dados-server .
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /repo
+COPY contracts/ contracts/
+COPY src/Game.Core/ src/Game.Core/
+COPY src/Game.Server/ src/Game.Server/
+RUN dotnet publish src/Game.Server/Game.Server.csproj -c Release -o /app
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /app .
+# Escuchar en todas las interfaces, no solo en localhost
+ENV GAME_SERVER_URL=http://0.0.0.0:5000
+EXPOSE 5000
+ENTRYPOINT ["dotnet", "Game.Server.dll"]

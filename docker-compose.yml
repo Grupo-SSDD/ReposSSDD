@@ -1,0 +1,35 @@
+# Máquina "servidor": RabbitMQ + servidor de juego
+#   docker compose up -d --build rabbitmq server
+# Un cliente en la misma máquina:
+#   docker compose run --rm client
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile.server
+    environment:
+      RABBITMQ_HOST: rabbitmq
+    ports:
+      - "5000:5000"
+    depends_on:
+      - rabbitmq
+    restart: on-failure
+
+  client:
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+    environment:
+      GAME_SERVER_ADDRESS: http://server:5000
+      RABBITMQ_HOST: rabbitmq
+    stdin_open: true
+    tty: true
+    profiles: ["client"]
+    depends_on:
+      - server

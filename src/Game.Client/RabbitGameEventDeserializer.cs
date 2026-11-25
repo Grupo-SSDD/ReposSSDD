@@ -6,14 +6,17 @@ namespace Game.Client;
 
 public static class RabbitGameEventDeserializer
 {
-    public static GameEvent Deserialize(string routingKey, ReadOnlyMemory<byte> body)
+    public static GameEvent Deserialize(
+        string routingKey,
+        ReadOnlyMemory<byte> body,
+        RabbitMqConnectionOptions options)
     {
         var json = Encoding.UTF8.GetString(body.Span);
         return routingKey switch
         {
-            RabbitGameEventSubscriber.TurnRoutingKey => DeserializeTurn(
+            _ when routingKey == options.TurnRoutingKey => DeserializeTurn(
                 JsonParser.Default.Parse<Game.Contracts.TurnEvent>(json)),
-            RabbitGameEventSubscriber.ScoresRoutingKey => DeserializeScores(
+            _ when routingKey == options.ScoresRoutingKey => DeserializeScores(
                 JsonParser.Default.Parse<Game.Contracts.ScoresEvent>(json)),
             _ => throw new InvalidDataException($"Routing key RabbitMQ no soportada: {routingKey}.")
         };
